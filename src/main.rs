@@ -1,6 +1,8 @@
+use csv::WriterBuilder;
 use reqwest::Error;
 use serde::Deserialize;
 use std::env;
+use std::fs::File;
 
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case, dead_code)]
@@ -34,17 +36,20 @@ async fn main() -> Result<(), Error> {
     let response = reqwest::get(&url).await?;
     let league: League = response.json().await?;
 
-    let mut top_100_players: Vec<Player> = league.entries.into_iter().take(100).collect();
+    let mut top_100_players: Vec<Player> = league.entries.into_iter().collect();
+
+    let file = File::create("korea_leaderboard.csv").expect("Failed to create file.");
+    let mut writer = WriterBuilder::new().has_headers(true).from_writer(file);
+    writer.write_record(&["Summoner Name", "LP"]).unwrap();
 
     top_100_players.sort_by_key(|player| std::cmp::Reverse(player.leaguePoints));
 
-    for (i, player) in top_100_players.iter().enumerate() {
-        println!(
-            "{}. {}: {}",
-            i + 1,
-            player.summonerName,
-            player.leaguePoints
-        );
+    let top_100_players = top_100_players.iter().take(100);
+
+    for player in top_100_players {
+        writer
+            .write_record(&[&player.summonerName, &player.leaguePoints.to_string()])
+            .unwrap();
     }
 
     Ok(())
