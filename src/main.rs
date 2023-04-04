@@ -1,10 +1,11 @@
 use csv::WriterBuilder;
-use reqwest::Error;
+use reqwest::{Client, Error};
+use scraper::{Html, Selector};
 use serde::Deserialize;
 use std::env;
 use std::fs::File;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)] // Add `Clone` to the derive list
 #[allow(non_snake_case, dead_code)]
 struct Player {
     summonerName: String,
@@ -20,6 +21,8 @@ const BASE_URL: &str = "https://kr.api.riotgames.com";
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+    let client = Client::new();
+
     let api_key = match env::args().nth(1) {
         Some(key) => key,
         None => {
@@ -33,7 +36,7 @@ async fn main() -> Result<(), Error> {
         BASE_URL, api_key
     );
 
-    let response = reqwest::get(&url).await?;
+    let response = client.get(&url).send().await?;
     let league: League = response.json().await?;
 
     let mut top_100_players: Vec<Player> = league.entries.into_iter().collect();
@@ -45,6 +48,43 @@ async fn main() -> Result<(), Error> {
     top_100_players.sort_by_key(|player| std::cmp::Reverse(player.leaguePoints));
 
     let top_100_players = top_100_players.iter().take(100);
+
+    let top_1: Vec<Player> = top_100_players.clone().take(1).cloned().collect();
+
+    if let Some(rank_one) = top_1.get(0) {
+        let url = format!("https://www.op.gg/summoners/kr/{}", rank_one.summonerName);
+        let response = client.get(&url).send().await?;
+        let body = response.text().await?;
+
+        let document = Html::parse_document(&body);
+        let champion_selector = Selector::parse(".champion-box").unwrap();
+        let champion_list = document.select(&champion_selector);
+
+        for champion_element in champion_list {
+            let name_selector = Selector::parse(".name a").unwrap();
+            let played_selector = Selector::parse(".played .count").unwrap();
+
+            let champion_name = champion_element
+                .select(&name_selector)
+                .next()
+                .unwrap()
+                .text()
+                .collect::<String>();
+            let played = champion_element
+                .select(&played_selector)
+                .next()
+                .unwrap()
+                .text()
+                .collect::<String>();
+
+            // instead of printing, let's write it to our csv
+            println!("{} {}", champion_name, played);
+
+            writer
+                .write_record(&[champion_name, played])
+                .expect("Couldn't write to file.");
+        }
+    }
 
     for player in top_100_players {
         writer
