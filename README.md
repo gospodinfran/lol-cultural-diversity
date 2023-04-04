@@ -1,0 +1,1 @@
+Demonstrating how culture and region affect League of Legends champion pools.
