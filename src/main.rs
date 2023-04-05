@@ -41,18 +41,15 @@ async fn main() -> Result<(), Error> {
 
     let mut top_100_players: Vec<Player> = league.entries.into_iter().collect();
 
-    let file = File::create("korea_leaderboard.csv").expect("Failed to create file.");
-    let mut writer = WriterBuilder::new().has_headers(true).from_writer(file);
-    writer.write_record(&["Summoner Name", "LP"]).unwrap();
+    let file = File::create("korea_leaderboard.csv").expect("failed to create file.");
+    let mut writer = WriterBuilder::new().has_headers(false).from_writer(file);
 
     top_100_players.sort_by_key(|player| std::cmp::Reverse(player.leaguePoints));
 
     let top_100_players = top_100_players.iter().take(100);
 
-    let top_1: Vec<Player> = top_100_players.clone().take(1).cloned().collect();
-
-    if let Some(rank_one) = top_1.get(0) {
-        let url = format!("https://www.op.gg/summoners/kr/{}", rank_one.summonerName);
+    for player in top_100_players.clone().take(10) {
+        let url = format!("https://www.op.gg/summoners/kr/{}", player.summonerName);
         let response = client.get(&url).send().await?;
         let body = response.text().await?;
 
@@ -60,7 +57,7 @@ async fn main() -> Result<(), Error> {
         let champion_selector = Selector::parse(".champion-box").unwrap();
         let champion_list = document.select(&champion_selector);
 
-        for champion_element in champion_list {
+        for champion_element in champion_list.take(3) {
             let name_selector = Selector::parse(".name a").unwrap();
             let played_selector = Selector::parse(".played .count").unwrap();
 
@@ -77,19 +74,13 @@ async fn main() -> Result<(), Error> {
                 .text()
                 .collect::<String>();
 
-            // instead of printing, let's write it to our csv
-            println!("{} {}", champion_name, played);
-
             writer
                 .write_record(&[champion_name, played])
-                .expect("Couldn't write to file.");
+                .expect("failed to write to file.");
         }
-    }
-
-    for player in top_100_players {
         writer
-            .write_record(&[&player.summonerName, &player.leaguePoints.to_string()])
-            .unwrap();
+            .write_record(&["---", "---"])
+            .expect("failed to write to file.")
     }
 
     Ok(())
