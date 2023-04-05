@@ -26,10 +26,20 @@ async fn main() -> Result<(), Error> {
     let api_key = match env::args().nth(1) {
         Some(key) => key,
         None => {
-            eprintln!("Usage: cargo run <api_key>.");
+            eprintln!("Usage: cargo run <api_key> <number_of_players_to_scout.");
             std::process::exit(1);
         }
     };
+
+    let n_players = match env::args().nth(2) {
+        Some(n) => n,
+        None => {
+            eprintln!("Usage: cargo run <api_key> <number_of_players_to_scout.");
+            std::process::exit(2);
+        }
+    };
+
+    let n_players: usize = n_players.trim().parse().expect("provide a smaller number.");
 
     let url = format!(
         "{}/lol/league/v4/challengerleagues/by-queue/RANKED_SOLO_5x5?api_key={}",
@@ -48,7 +58,7 @@ async fn main() -> Result<(), Error> {
 
     let top_100_players = top_100_players.iter().take(100);
 
-    for player in top_100_players.clone().take(10) {
+    for player in top_100_players.clone().take(n_players) {
         let url = format!("https://www.op.gg/summoners/kr/{}", player.summonerName);
         let response = client.get(&url).send().await?;
         let body = response.text().await?;
